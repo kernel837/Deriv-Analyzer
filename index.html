@@ -18,7 +18,7 @@
 
     <div class="max-w-md mx-auto">
         <div id="alertBanner" class="hidden bg-rose-600 text-white font-bold text-center py-1.5 rounded-lg mb-2 animate-pulse uppercase tracking-wider">
-            ⚠️ Spike Detected!
+            ⚠️ Hot Spike Detected!
         </div>
 
         <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3 flex flex-col gap-2">
@@ -26,19 +26,24 @@
                 <div class="flex-1">
                     <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Market</label>
                     <select id="marketSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
+                        <option value="1HZ10V" selected>Volatility 10 (1s) Index</option>
+                        <option value="1HZ15V">Volatility 15 (1s) Index</option>
+                        <option value="1HZ25V">Volatility 25 (1s) Index</option>
+                        <option value="1HZ30V">Volatility 30 (1s) Index</option>
+                        <option value="1HZ50V">Volatility 50 (1s) Index</option>
+                        <option value="1HZ75V">Volatility 75 (1s) Index</option>
+                        <option value="1HZ90V">Volatility 90 (1s) Index</option>
+                        <option value="1HZ100V">Volatility 100 (1s) Index</option>
                         <option value="R_10">Volatility 10 Index</option>
                         <option value="R_25">Volatility 25 Index</option>
                         <option value="R_50">Volatility 50 Index</option>
                         <option value="R_75">Volatility 75 Index</option>
-                        <option value="R_100" selected>Volatility 100 Index</option>
-                        <option value="1HZ10V">Volatility 10 (1s) Index</option>
-                        <option value="1HZ15V">Volatility 15 (1s) Index</option>
-                        <option value="1HZ100V">Volatility 100 (1s) Index</option>
+                        <option value="R_100">Volatility 100 Index</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Sample Size</label>
-                    <input type="number" id="sampleSize" value="100" min="20" max="500" class="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                    <input type="number" id="sampleSize" value="150" min="20" max="500" class="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Alert Trigger %</label>
@@ -48,6 +53,20 @@
             <button id="connectBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-1.5 rounded-lg transition duration-200">
                 Connect WebSocket
             </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border-b-2 border-indigo-500 text-center">
+                <span class="text-[9px] text-indigo-400 uppercase font-bold tracking-widest">20-Tick Mean Target</span>
+                <div id="meanSignal" class="text-2xl font-black mt-0.5 text-white">-</div>
+                <p class="text-[8px] text-gray-400 mt-0.5">Rolling mathematical average</p>
+            </div>
+            
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border-b-2 border-cyan-500 text-center">
+                <span class="text-[9px] text-cyan-400 uppercase font-bold tracking-widest">Reversion Anomaly</span>
+                <div id="anomalySignal" class="text-2xl font-black mt-0.5 text-gray-500">-</div>
+                <p class="text-[8px] text-gray-400 mt-0.5">Scans for digits at ≤ 2%</p>
+            </div>
         </div>
 
         <div class="grid grid-cols-4 gap-2 mb-3 text-center">
@@ -98,7 +117,6 @@
         let streakCount = 1;
         const appId = 1089;
         
-        // Setup Audio Context for Synthetic Beep Alerts
         let audioCtx = null;
         function playBeep(freq = 600, duration = 0.15) {
             try {
@@ -117,10 +135,9 @@
                 gain.connect(audioCtx.destination);
                 osc.start();
                 osc.stop(audioCtx.currentTime + duration);
-            } catch(e) { console.log("Audio blocked or unsupported."); }
+            } catch(e) {}
         }
 
-        // DOM Map
         const marketSelect = document.getElementById('marketSelect');
         const sampleSizeInput = document.getElementById('sampleSize');
         const alertPctInput = document.getElementById('alertPct');
@@ -133,8 +150,9 @@
         const alertBanner = document.getElementById('alertBanner');
         const logContainer = document.getElementById('logContainer');
         const clearLogBtn = document.getElementById('clearLog');
+        const anomalySignalEl = document.getElementById('anomalySignal');
+        const meanSignalEl = document.getElementById('meanSignal');
 
-        // Chart Init
         const ctx = document.getElementById('frequencyChart').getContext('2d');
         const frequencyChart = new Chart(ctx, {
             type: 'bar',
@@ -187,25 +205,27 @@
             connectBtn.textContent = 'Connect WebSocket';
             connectBtn.classList.replace('bg-rose-500', 'bg-emerald-500');
             alertBanner.classList.add('hidden');
+            anomalySignalEl.textContent = "-";
+            anomalySignalEl.className = "text-2xl font-black mt-0.5 text-gray-500";
+            meanSignalEl.textContent = "-";
+            meanSignalEl.className = "text-2xl font-black mt-0.5 text-white";
         }
 
         function processTick(tick) {
             const price = tick.quote;
             const priceStr = price.toFixed(tick.pip_size);
             const lastDigit = parseInt(priceStr.slice(-1));
-            const maxTicks = parseInt(sampleSizeInput.value) || 100;
+            const maxTicks = parseInt(sampleSizeInput.value) || 150;
             const triggerLimit = parseInt(alertPctInput.value) || 20;
 
             latestPriceEl.textContent = priceStr;
             latestDigitEl.textContent = lastDigit;
 
-            // Consecutive Streaks Checker
             if (previousDigit !== null) {
                 if (lastDigit === previousDigit) {
                     streakCount++;
                     repeatStreakEl.textContent = `💥 DIGIT ${lastDigit} HIT ${streakCount}x IN A ROW!`;
                     repeatStreakEl.className = "font-bold text-rose-400 text-sm animate-bounce";
-                    playBeep(880, 0.1); // High pitch alert for rapid matches
                 } else {
                     if (streakCount > 1) {
                         repeatStreakEl.className = "font-bold text-amber-400 text-xs";
@@ -216,9 +236,18 @@
             }
             previousDigit = lastDigit;
 
-            // Sliding Window Calculations
             tickHistory.push(lastDigit);
             if (tickHistory.length > maxTicks) tickHistory.shift();
+
+            // 20-Tick Mean Target Logic
+            const shortTermHistory = tickHistory.slice(-20);
+            if (shortTermHistory.length > 0) {
+                const sum = shortTermHistory.reduce((a, b) => a + b, 0);
+                const avg = sum / shortTermHistory.length;
+                const roundedAvg = Math.round(avg);
+                meanSignalEl.textContent = roundedAvg;
+                meanSignalEl.className = "text-2xl font-black mt-0.5 text-indigo-400 animate-pulse";
+            }
 
             const counts = Array(10).fill(0);
             tickHistory.forEach(num => counts[num]++);
@@ -239,23 +268,29 @@
             hottestDigitEl.textContent = `${hottest} (${maxPct.toFixed(0)}%)`;
             coldestDigitEl.textContent = `${coldest} (${minPct.toFixed(0)}%)`;
 
-            // Threshold Tracker Spike System
+            if (tickHistory.length >= maxTicks && minPct <= 2) {
+                anomalySignalEl.textContent = `${coldest}`;
+                anomalySignalEl.className = "text-2xl font-black mt-0.5 text-cyan-400 animate-pulse";
+            } else {
+                anomalySignalEl.textContent = "-";
+                anomalySignalEl.className = "text-2xl font-black mt-0.5 text-gray-500";
+            }
+
             if (maxPct >= triggerLimit) {
                 if(alertBanner.classList.contains('hidden')) {
                     alertBanner.classList.remove('hidden');
                     alertBanner.textContent = `⚠️ DIGIT ${hottest} CRITICAL SPIKE: ${maxPct.toFixed(0)}%`;
-                    playBeep(440, 0.3); // Notification warning chime
+                    playBeep(440, 0.3); 
                     logSpikeTrend(hottest, maxPct.toFixed(0), marketSelect.value);
                 }
             } else {
                 alertBanner.classList.add('hidden');
             }
 
-            // Sync Graphs
             frequencyChart.data.datasets[0].data = percentages;
             const bgColors = percentages.map((p, d) => {
-                if (d === hottest) return 'rgba(244, 63, 94, 0.85)'; // Hot Pink-red
-                if (d === coldest) return 'rgba(6, 182, 212, 0.85)'; // Cold Cyber-blue
+                if (d === hottest) return 'rgba(244, 63, 94, 0.85)'; 
+                if (d === coldest) return 'rgba(6, 182, 212, 0.85)'; 
                 return 'rgba(52, 211, 153, 0.2)';
             });
             frequencyChart.data.datasets[0].backgroundColor = bgColors;
@@ -266,7 +301,6 @@
             const now = new Date();
             const timeStr = now.toTimeString().split(' ')[0];
             
-            // Clean out initialization blank block if present
             if(logContainer.innerHTML.includes("Awaiting hot data")) logContainer.innerHTML = "";
             
             const logRow = document.createElement('div');
@@ -275,7 +309,6 @@
             
             logContainer.insertBefore(logRow, logContainer.firstChild);
             
-            // Constrain storage limit elements so DOM doesn't get massive over thousands of ticks
             if (logContainer.children.length > 30) logContainer.removeChild(logContainer.lastChild);
         }
 
@@ -284,7 +317,6 @@
         });
 
         connectBtn.addEventListener('click', () => {
-            // Unlock Mobile Web Audio API inside user action context block
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (ws) { disconnectFromDeriv(); } else { connectToDeriv(); }
         });
@@ -299,96 +331,3 @@
 </body>
 </html>
 
-        function connectToDeriv() {
-            if (ws) ws.close();
-            const market = marketSelect.value;
-            tickHistory = [];
-            
-            ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
-
-            ws.onopen = () => {
-                connectBtn.textContent = 'Disconnect';
-                connectBtn.classList.replace('bg-emerald-500', 'bg-rose-500');
-                ws.send(JSON.stringify({ ticks: market }));
-            };
-
-            ws.onmessage = (msg) => {
-                const data = JSON.parse(msg.data);
-                if (data.error) {
-                    alert('Error: ' + data.error.message);
-                    disconnectFromDeriv();
-                    return;
-                }
-                if (data.msg_type === 'tick' && data.tick) {
-                    processTick(data.tick);
-                }
-            };
-
-            ws.onclose = () => { disconnectFromDeriv(); };
-        }
-
-        function disconnectFromDeriv() {
-            if (ws) ws.close();
-            ws = null;
-            connectBtn.textContent = 'Connect';
-            connectBtn.classList.replace('bg-rose-500', 'bg-emerald-500');
-        }
-
-        function processTick(tick) {
-            const price = tick.quote;
-            const priceStr = price.toFixed(tick.pip_size);
-            const lastDigit = parseInt(priceStr.slice(-1));
-            const maxTicks = parseInt(sampleSizeInput.value) || 150;
-
-            latestPriceEl.textContent = priceStr;
-            latestDigitEl.textContent = lastDigit;
-
-            tickHistory.push(lastDigit);
-            if (tickHistory.length > maxTicks) {
-                tickHistory.shift();
-            }
-
-            const counts = Array(10).fill(0);
-            tickHistory.forEach(num => counts[num]++);
-
-            const total = tickHistory.length;
-            let maxPct = -1;
-            let hottest = '-';
-
-            const percentages = counts.map((count, digit) => {
-                const pct = total > 0 ? ((count / total) * 100) : 0;
-                if (pct > maxPct) {
-                    maxPct = pct;
-                    hottest = digit;
-                }
-                return pct.toFixed(1);
-            });
-
-            hottestDigitEl.textContent = `${hottest} (${maxPct.toFixed(0)}%)`;
-
-            frequencyChart.data.datasets[0].data = percentages;
-            const bgColors = Array(10).fill('rgba(52, 211, 153, 0.4)');
-            if (hottest !== '-') {
-                bgColors[hottest] = 'rgba(244, 63, 94, 0.8)';
-            }
-            frequencyChart.data.datasets[0].backgroundColor = bgColors;
-            frequencyChart.update('none');
-        }
-
-        connectBtn.addEventListener('click', () => {
-            if (ws) { disconnectFromDeriv(); } else { connectToDeriv(); }
-        });
-
-        marketSelect.addEventListener('change', () => {
-            if (ws) connectToDeriv();
-        });
-
-        // Register dummy service worker to satisfy Chrome PWA requirement
-        if ('serviceWorker' in navigator) {
-            const swCode = `self.addEventListener('fetch', function(e) { /* Live tracking data bypassed */ });`;
-            const blob = new Blob([swCode], {type: 'application/javascript'});
-            navigator.serviceWorker.register(URL.createObjectURL(blob));
-        }
-    </script>
-</body>
-</html>
