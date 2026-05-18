@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deriv Tick Digit Analyzer</title>
+    
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Deriv%20Analyzer%22,%22short_name%22:%22Analyzer%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23111827%22,%22theme_color%22:%22%23111827%22,%22icons%22:[{%22src%22:%22https://cdn-icons-png.flaticon.com/512/423/423786.png%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22,%22purpose%22:%22any%20maskable%22}]}">
+
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 select-none">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-4 text-center">
+            <h1 class="text-2xl font-bold text-emerald-400">Deriv Tick Digit Analyzer</h1>
+            <p class="text-xs text-gray-400 mt-1">Real-time last digit tracker via WebSocket</p>
+        </header>
+
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg mb-4 flex flex-col gap-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Select Market</label>
+                <select id="marketSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                    <option value="R_10">Volatility 10 Index</option>
+                    <option value="R_25">Volatility 25 Index</option>
+                    <option value="R_50">Volatility 50 Index</option>
+                    <option value="R_75">Volatility 75 Index</option>
+                    <option value="R_100" selected>Volatility 100 Index</option>
+                    <option value="1HZ10V">Volatility 10 (1s) Index</option>
+                    <option value="1HZ15V">Volatility 15 (1s) Index</option>
+                    <option value="1HZ100V">Volatility 100 (1s) Index</option>
+                </select>
+            </div>
+            <div class="flex gap-3 items-end">
+                <div class="flex-1">
+                    <label class="block text-xs font-medium text-gray-300 mb-1">Sample Size</label>
+                    <input type="number" id="sampleSize" value="150" min="20" max="1000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <button id="connectBtn" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-1.5 rounded-lg text-sm transition duration-200">
+                    Connect
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="bg-gray-800 p-3 rounded-xl shadow-lg text-center flex flex-col justify-center">
+                <span class="text-[10px] text-gray-400 uppercase tracking-wider">Price</span>
+                <div id="latestPrice" class="text-sm font-mono font-bold mt-1 text-blue-400 truncate">-</div>
+            </div>
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg text-center">
+                <span class="text-[10px] text-gray-400 uppercase tracking-wider">Last Digit</span>
+                <div id="latestDigit" class="text-2xl font-black text-yellow-400">-</div>
+            </div>
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg text-center">
+                <span class="text-[10px] text-gray-400 uppercase tracking-wider">Hottest</span>
+                <div id="hottestDigit" class="text-sm font-bold mt-1 text-rose-400">-</div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+            <h3 class="text-sm font-semibold mb-2 text-gray-300">Digit Frequency (%)</h3>
+            <div class="h-48">
+                <canvas id="frequencyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // App State
+        let ws = null;
+        let tickHistory = [];
+        const appId = 1089; 
+        
+        // DOM Elements
+        const marketSelect = document.getElementById('marketSelect');
+        const sampleSizeInput = document.getElementById('sampleSize');
+        const connectBtn = document.getElementById('connectBtn');
+        const latestPriceEl = document.getElementById('latestPrice');
+        const latestDigitEl = document.getElementById('latestDigit');
+        const hottestDigitEl = document.getElementById('hottestDigit');
+
+        // Setup Chart.js
+        const ctx = document.getElementById('frequencyChart').getContext('2d');
+        const frequencyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                datasets: [{
+                    label: 'Frequency %',
+                    data: Array(10).fill(0),
+                    backgroundColor: 'rgba(52, 211, 153, 0.6)',
+                    borderColor: 'rgba(52, 211, 153, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 30, grid: { color: '#374151' }, ticks: { color: '#9CA3AF', textStrokeWidth: 0 } },
+                    x: { grid: { display: false }, ticks: { color: '#9CA3AF', font: { weight: 'bold' } } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        function connectToDeriv() {
+            if (ws) ws.close();
+            const market = marketSelect.value;
+            tickHistory = [];
+            
+            ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+
+            ws.onopen = () => {
+                connectBtn.textContent = 'Disconnect';
+                connectBtn.classList.replace('bg-emerald-500', 'bg-rose-500');
+                ws.send(JSON.stringify({ ticks: market }));
+            };
+
+            ws.onmessage = (msg) => {
+                const data = JSON.parse(msg.data);
+                if (data.error) {
+                    alert('Error: ' + data.error.message);
+                    disconnectFromDeriv();
+                    return;
+                }
+                if (data.msg_type === 'tick' && data.tick) {
+                    processTick(data.tick);
+                }
+            };
+
+            ws.onclose = () => { disconnectFromDeriv(); };
+        }
+
+        function disconnectFromDeriv() {
+            if (ws) ws.close();
+            ws = null;
+            connectBtn.textContent = 'Connect';
+            connectBtn.classList.replace('bg-rose-500', 'bg-emerald-500');
+        }
+
+        function processTick(tick) {
+            const price = tick.quote;
+            const priceStr = price.toFixed(tick.pip_size);
+            const lastDigit = parseInt(priceStr.slice(-1));
+            const maxTicks = parseInt(sampleSizeInput.value) || 150;
+
+            latestPriceEl.textContent = priceStr;
+            latestDigitEl.textContent = lastDigit;
+
+            tickHistory.push(lastDigit);
+            if (tickHistory.length > maxTicks) {
+                tickHistory.shift();
+            }
+
+            const counts = Array(10).fill(0);
+            tickHistory.forEach(num => counts[num]++);
+
+            const total = tickHistory.length;
+            let maxPct = -1;
+            let hottest = '-';
+
+            const percentages = counts.map((count, digit) => {
+                const pct = total > 0 ? ((count / total) * 100) : 0;
+                if (pct > maxPct) {
+                    maxPct = pct;
+                    hottest = digit;
+                }
+                return pct.toFixed(1);
+            });
+
+            hottestDigitEl.textContent = `${hottest} (${maxPct.toFixed(0)}%)`;
+
+            frequencyChart.data.datasets[0].data = percentages;
+            const bgColors = Array(10).fill('rgba(52, 211, 153, 0.4)');
+            if (hottest !== '-') {
+                bgColors[hottest] = 'rgba(244, 63, 94, 0.8)';
+            }
+            frequencyChart.data.datasets[0].backgroundColor = bgColors;
+            frequencyChart.update('none');
+        }
+
+        connectBtn.addEventListener('click', () => {
+            if (ws) { disconnectFromDeriv(); } else { connectToDeriv(); }
+        });
+
+        marketSelect.addEventListener('change', () => {
+            if (ws) connectToDeriv();
+        });
+
+        // Register dummy service worker to satisfy Chrome PWA requirement
+        if ('serviceWorker' in navigator) {
+            const swCode = `self.addEventListener('fetch', function(e) { /* Live tracking data bypassed */ });`;
+            const blob = new Blob([swCode], {type: 'application/javascript'});
+            navigator.serviceWorker.register(URL.createObjectURL(blob));
+        }
+    </script>
+</body>
+</html>
