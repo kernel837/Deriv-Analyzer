@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deriv Pro Tick Analyzer & Auto-Trader</title>
+    <title>Deriv Pro Tick Analyzer</title>
     
     <meta name="theme-color" content="#111827">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -81,7 +81,7 @@
                 </div>
                 <div>
                     <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Beep Alert %</label>
-                    <input type="number" id="alertPct" value="20" min="10" max="50" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                    <input type="number" id="alertPct" value="15" min="10" max="50" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
                 </div>
             </div>
 
@@ -96,7 +96,7 @@
                 </div>
             </div>
 
-            <button id="connectBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-1.5 rounded-lg transition duration-200 mt-2">
+            <button id="connectBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-2 rounded-lg transition duration-200 mt-2">
                 Connect & Authenticate
             </button>
         </div>
@@ -145,7 +145,7 @@
             <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider">Consecutive Repeat</span>
             <div id="repeatStreak" class="font-bold text-amber-400 text-sm">No Streak</div>
         </div>
-
+        
         <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3">
             <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider block mb-1">Live Trade Execution Log</span>
             <div id="tradeLog" class="h-24 overflow-y-auto font-mono text-[10px] space-y-1 text-gray-300 bg-gray-900 rounded p-1.5 border border-gray-700/50">
@@ -165,7 +165,7 @@
         let tickHistory = [];
         let previousDigit = null;
         let streakCount = 1;
-        const appId = 1089;
+        const appId = 1089; 
         
         let isAuthorized = false;
         
@@ -188,11 +188,14 @@
             } catch(e) {}
         }
 
-        // DOM Elements
         const marketSelect = document.getElementById('marketSelect');
         const sampleSizeInput = document.getElementById('sampleSize');
         const alertPctInput = document.getElementById('alertPct');
+        const stakeInput = document.getElementById('stakeAmount');
+        const tradeConfInput = document.getElementById('tradeConf');
+        const tradeStdDevInput = document.getElementById('tradeStdDev');
         const connectBtn = document.getElementById('connectBtn');
+        
         const latestPriceEl = document.getElementById('latestPrice');
         const latestDigitEl = document.getElementById('latestDigit');
         const hottestDigitEl = document.getElementById('hottestDigit');
@@ -204,10 +207,6 @@
         const stdDevSignalEl = document.getElementById('stdDevSignal');
         const stdDevStatusEl = document.getElementById('stdDevStatus');
         const sequenceMemoryEl = document.getElementById('sequenceMemory');
-        
-        const stakeInput = document.getElementById('stakeAmount');
-        const tradeConfInput = document.getElementById('tradeConf');
-        const tradeStdDevInput = document.getElementById('tradeStdDev');
         const tradeLogEl = document.getElementById('tradeLog');
 
         const headerBalance = document.getElementById('headerBalance');
@@ -215,7 +214,6 @@
         const accountHeader = document.getElementById('accountHeader');
         const connectionDot = document.getElementById('connectionDot');
 
-        // Chart Init
         const ctx = document.getElementById('frequencyChart').getContext('2d');
         const frequencyChart = new Chart(ctx, {
             type: 'bar',
@@ -306,7 +304,7 @@
             ws.onopen = () => {
                 connectBtn.textContent = 'Authenticating...';
                 connectBtn.classList.replace('bg-emerald-500', 'bg-amber-500');
-                connectionDot.classList.replace('bg-rose-500', 'bg-amber-500');
+                if (connectionDot) connectionDot.classList.replace('bg-rose-500', 'bg-amber-500');
                 logTrade("WebSocket open. Sending authorization token...");
                 ws.send(JSON.stringify({ authorize: token }));
             };
@@ -328,21 +326,23 @@
                     isAuthorized = true;
                     connectBtn.textContent = 'Disconnect (LIVE TRADING)';
                     connectBtn.classList.replace('bg-amber-500', 'bg-rose-500');
-                    connectionDot.classList.replace('bg-amber-500', 'bg-emerald-500');
+                    if (connectionDot) connectionDot.classList.replace('bg-amber-500', 'bg-emerald-500');
                     
                     const isVirtual = data.authorize.is_virtual;
                     const balance = data.authorize.balance;
                     const currency = data.authorize.currency;
 
-                    headerBalance.textContent = `${balance.toFixed(2)} ${currency}`;
-                    if (isVirtual) {
-                        headerAccountType.textContent = "DEMO ACCOUNT";
-                        headerAccountType.className = "text-[10px] text-amber-400 font-black tracking-widest uppercase animate-pulse";
-                        accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-amber-500";
-                    } else {
-                        headerAccountType.textContent = "REAL MONEY ACCOUNT";
-                        headerAccountType.className = "text-[10px] text-rose-500 font-black tracking-widest uppercase animate-pulse";
-                        accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-rose-500";
+                    if (headerBalance) headerBalance.textContent = `${balance.toFixed(2)} ${currency}`;
+                    if (headerAccountType && accountHeader) {
+                        if (isVirtual) {
+                            headerAccountType.textContent = "DEMO ACCOUNT";
+                            headerAccountType.className = "text-[10px] text-amber-400 font-black tracking-widest uppercase animate-pulse";
+                            accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-amber-500";
+                        } else {
+                            headerAccountType.textContent = "REAL MONEY ACCOUNT";
+                            headerAccountType.className = "text-[10px] text-rose-500 font-black tracking-widest uppercase animate-pulse";
+                            accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-rose-500";
+                        }
                     }
 
                     logTrade(`Success! Account: <b class="text-white">${data.authorize.loginid}</b>`);
@@ -354,7 +354,7 @@
                 if (data.msg_type === 'balance') {
                     const currentBal = data.balance.balance;
                     const curr = data.balance.currency;
-                    headerBalance.textContent = `${currentBal.toFixed(2)} ${curr}`;
+                    if (headerBalance) headerBalance.textContent = `${currentBal.toFixed(2)} ${curr}`;
                 }
 
                 if (data.msg_type === 'tick' && data.tick) { 
@@ -365,9 +365,4 @@
                     if (data.error) {
                         logTrade(`Trade Failed: ${data.error.message}`, true);
                     } else {
-                        logTrade(`Trade Executed! Contract ID: <b class="text-white">${data.buy.contract_id}</b>`);
-                    }
-                }
-            };
-
-            ws
+                        logTrade(`Trade Exe
