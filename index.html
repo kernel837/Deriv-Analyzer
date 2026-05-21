@@ -9,13 +9,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
+    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Deriv%20Pro%20Analyzer%22,%22short_name%22:%22Pro%20Analyzer%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23111827%22,%22theme_color%22:%22%23111827%22,%22icons%22:[{%22src%22:%22https://cdn-icons-png.flaticon.com/512/423/423786.png%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22,%22purpose%22:%22any%20maskable%22}]}">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen p-3 select-none text-xs">
 
     <div class="max-w-md mx-auto">
-        
         <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-gray-600" id="accountHeader">
             <div class="flex justify-between items-center mb-1">
                 <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Account Status</span>
@@ -80,13 +81,13 @@
                 </div>
                 <div>
                     <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Beep Alert %</label>
-                    <input type="number" id="alertPct" value="15" min="10" max="50" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                    <input type="number" id="alertPct" value="20" min="10" max="50" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
                 </div>
             </div>
 
             <div class="grid grid-cols-2 gap-2 mb-1">
                 <div>
-                    <label class="block text-[10px] font-bold text-emerald-400 mb-0.5 uppercase tracking-wider">Trigger: Min Confidence (%)</label>
+                    <label class="block text-[10px] font-bold text-emerald-400 mb-0.5 uppercase tracking-wider">Trigger: Min Conf (%)</label>
                     <input type="number" id="tradeConf" value="17" step="1" class="w-full bg-gray-900 border border-emerald-600/50 rounded-lg px-2 py-1.5 text-center text-emerald-400 font-bold focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
@@ -95,7 +96,7 @@
                 </div>
             </div>
 
-            <button id="connectBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-2 rounded-lg transition duration-200 mt-2">
+            <button id="connectBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-1.5 rounded-lg transition duration-200 mt-2">
                 Connect & Authenticate
             </button>
         </div>
@@ -144,7 +145,7 @@
             <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider">Consecutive Repeat</span>
             <div id="repeatStreak" class="font-bold text-amber-400 text-sm">No Streak</div>
         </div>
-        
+
         <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3">
             <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider block mb-1">Live Trade Execution Log</span>
             <div id="tradeLog" class="h-24 overflow-y-auto font-mono text-[10px] space-y-1 text-gray-300 bg-gray-900 rounded p-1.5 border border-gray-700/50">
@@ -164,12 +165,12 @@
         let tickHistory = [];
         let previousDigit = null;
         let streakCount = 1;
-        const appId = 1089; 
+        const appId = 1089;
         
         let isAuthorized = false;
-        let isTrading = false;
+        
+        // Audio Context
         let audioCtx = null;
-
         function playBeep(freq = 600, duration = 0.15) {
             try {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -184,19 +185,14 @@
                 gain.connect(audioCtx.destination);
                 osc.start();
                 osc.stop(audioCtx.currentTime + duration);
-            } catch(e) {
-                console.warn("Audio blocked by browser.");
-            }
+            } catch(e) {}
         }
 
+        // DOM Elements
         const marketSelect = document.getElementById('marketSelect');
         const sampleSizeInput = document.getElementById('sampleSize');
         const alertPctInput = document.getElementById('alertPct');
-        const stakeInput = document.getElementById('stakeAmount');
-        const tradeConfInput = document.getElementById('tradeConf');
-        const tradeStdDevInput = document.getElementById('tradeStdDev');
         const connectBtn = document.getElementById('connectBtn');
-        
         const latestPriceEl = document.getElementById('latestPrice');
         const latestDigitEl = document.getElementById('latestDigit');
         const hottestDigitEl = document.getElementById('hottestDigit');
@@ -208,6 +204,10 @@
         const stdDevSignalEl = document.getElementById('stdDevSignal');
         const stdDevStatusEl = document.getElementById('stdDevStatus');
         const sequenceMemoryEl = document.getElementById('sequenceMemory');
+        
+        const stakeInput = document.getElementById('stakeAmount');
+        const tradeConfInput = document.getElementById('tradeConf');
+        const tradeStdDevInput = document.getElementById('tradeStdDev');
         const tradeLogEl = document.getElementById('tradeLog');
 
         const headerBalance = document.getElementById('headerBalance');
@@ -215,6 +215,7 @@
         const accountHeader = document.getElementById('accountHeader');
         const connectionDot = document.getElementById('connectionDot');
 
+        // Chart Init
         const ctx = document.getElementById('frequencyChart').getContext('2d');
         const frequencyChart = new Chart(ctx, {
             type: 'bar',
@@ -252,9 +253,8 @@
         }
 
         function executeTrade(targetDigit) {
-            if (!isAuthorized || isTrading) return; 
+            if (!isAuthorized) return; 
             
-            isTrading = true; 
             const currentStake = parseFloat(stakeInput.value) || 1.00;
 
             logTrade(`Initiating BUY command for Digit MATCH on <b class="text-white">${targetDigit}</b> (Stake: $${currentStake.toFixed(2)})...`);
@@ -364,21 +364,10 @@
                 if (data.msg_type === 'buy') {
                     if (data.error) {
                         logTrade(`Trade Failed: ${data.error.message}`, true);
-                        isTrading = false;
                     } else {
                         logTrade(`Trade Executed! Contract ID: <b class="text-white">${data.buy.contract_id}</b>`);
-                        isTrading = false;
                     }
                 }
             };
 
-            ws.onclose = () => { 
-                if(isAuthorized) disconnectFromDeriv(); 
-            };
-        }
-
-        function disconnectFromDeriv() {
-            if (ws) ws.close();
-            ws = null;
-            isAuthorized = false;
-            connectBtn.textContent = '
+            ws
