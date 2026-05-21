@@ -9,48 +9,73 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     
-    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22Deriv%20Pro%20Analyzer%22,%22short_name%22:%22Pro%20Analyzer%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23111827%22,%22theme_color%22:%22%23111827%22,%22icons%22:[{%22src%22:%22https://cdn-icons-png.flaticon.com/512/423/423786.png%22,%22sizes%22:%22512x512%22,%22type%22:%22image/png%22,%22purpose%22:%22any%20maskable%22}]}">
-
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen p-3 select-none text-xs">
 
     <div class="max-w-md mx-auto">
+        
+        <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-gray-600" id="accountHeader">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Account Status</span>
+                <span id="headerAccountType" class="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Disconnected</span>
+            </div>
+            <div class="flex justify-between items-end">
+                <div>
+                    <span class="text-[10px] text-gray-500 block">Live Balance</span>
+                    <div id="headerBalance" class="text-2xl font-black text-white">-</div>
+                </div>
+                <div id="connectionDot" class="h-3 w-3 rounded-full bg-rose-500 mb-1"></div>
+            </div>
+        </div>
+
         <div id="alertBanner" class="hidden bg-rose-600 text-white font-bold text-center py-1.5 rounded-lg mb-2 animate-pulse uppercase tracking-wider">
             ⚠️ Hot Spike Detected!
         </div>
 
         <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3 flex flex-col gap-2">
-            <div class="mb-2">
-                <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Deriv API Trading Token (Demo Only)</label>
-                <input type="password" id="apiToken" placeholder="Paste Read/Trade API token here..." class="w-full bg-gray-900 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs">
+            
+            <div id="loginSection" class="mb-2 p-3 bg-gray-900 rounded-lg text-center border border-gray-700">
+                <p class="text-gray-400 mb-2 text-[10px]">Securely connect your Deriv account to begin analysis.</p>
+                <button id="oauthLoginBtn" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 rounded shadow transition duration-200 uppercase tracking-widest text-[10px]">
+                    Log in with Deriv
+                </button>
             </div>
 
-            <div class="flex gap-2">
-                <div class="flex-1">
-                    <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Market</label>
-                    <select id="marketSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
-                        <option value="1HZ10V" selected>Volatility 10 (1s) Index</option>
-                        <option value="1HZ25V">Volatility 25 (1s) Index</option>
-                        <option value="1HZ50V">Volatility 50 (1s) Index</option>
-                        <option value="1HZ75V">Volatility 75 (1s) Index</option>
-                        <option value="1HZ100V">Volatility 100 (1s) Index</option>
-                        <option value="R_10">Volatility 10 Index</option>
-                        <option value="R_100">Volatility 100 Index</option>
-                    </select>
+            <div id="tradingControls" class="opacity-50 pointer-events-none transition-opacity duration-300">
+                <div class="flex gap-2 mb-2">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Market</label>
+                        <select id="marketSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-white focus:outline-none focus:border-emerald-500">
+                            <option value="1HZ10V" selected>Volatility 10 (1s) Index</option>
+                            <option value="1HZ25V">Volatility 25 (1s) Index</option>
+                            <option value="1HZ50V">Volatility 50 (1s) Index</option>
+                            <option value="1HZ75V">Volatility 75 (1s) Index</option>
+                            <option value="1HZ100V">Volatility 100 (1s) Index</option>
+                            <option value="R_10">Volatility 10 Index</option>
+                            <option value="R_100">Volatility 100 Index</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Stake ($)</label>
+                        <input type="number" id="stakeAmount" value="1.00" step="0.50" min="0.35" class="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Ticks</label>
-                    <input type="number" id="sampleSize" value="100" min="20" max="500" class="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Alert %</label>
-                    <input type="number" id="alertPct" value="20" min="15" max="40" class="w-16 bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                <div class="flex gap-2">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Ticks to Scan</label>
+                        <input type="number" id="sampleSize" value="100" min="20" max="500" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Alert Trigger %</label>
+                        <input type="number" id="alertPct" value="17" min="15" max="40" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                    </div>
                 </div>
             </div>
-            <button id="connectBtn" class="w-full bg-emerald-500 hover:bg-emerald-600 text-gray-950 font-bold py-1.5 rounded-lg transition duration-200 mt-2">
-                Connect & Authenticate
+            
+            <button id="disconnectBtn" class="hidden w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold py-1.5 rounded-lg transition duration-200 mt-2 border border-gray-600">
+                Disconnect Terminal
             </button>
         </div>
 
@@ -102,7 +127,7 @@
         <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3">
             <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider block mb-1">Live Trade Execution Log</span>
             <div id="tradeLog" class="h-24 overflow-y-auto font-mono text-[10px] space-y-1 text-gray-300 bg-gray-900 rounded p-1.5 border border-gray-700/50">
-                Waiting for authorization...
+                System Ready. Authenticate to begin.
             </div>
         </div>
 
@@ -114,18 +139,51 @@
     </div>
 
     <script>
+        // ==========================================
+        // SET YOUR REGISTERED DERIV APP ID HERE
+        // ==========================================
+        const appId = '1089'; // Replace with the App ID you generated on Deriv API dashboard
+        
         let ws = null;
         let tickHistory = [];
         let previousDigit = null;
         let streakCount = 1;
-        const appId = 1089;
+        let currentOAuthToken = null;
         
-        // NEW: Authorization & Trading State
         let isAuthorized = false;
         let isTrading = false;
-        
-        // Audio Context
         let audioCtx = null;
+
+        // DOM Elements
+        const loginSection = document.getElementById('loginSection');
+        const tradingControls = document.getElementById('tradingControls');
+        const oauthLoginBtn = document.getElementById('oauthLoginBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        
+        const marketSelect = document.getElementById('marketSelect');
+        const sampleSizeInput = document.getElementById('sampleSize');
+        const alertPctInput = document.getElementById('alertPct');
+        const stakeInput = document.getElementById('stakeAmount'); 
+        
+        const latestPriceEl = document.getElementById('latestPrice');
+        const latestDigitEl = document.getElementById('latestDigit');
+        const hottestDigitEl = document.getElementById('hottestDigit');
+        const coldestDigitEl = document.getElementById('coldestDigit');
+        const repeatStreakEl = document.getElementById('repeatStreak');
+        const alertBanner = document.getElementById('alertBanner');
+        
+        const confidenceSignalEl = document.getElementById('confidenceSignal');
+        const stdDevSignalEl = document.getElementById('stdDevSignal');
+        const stdDevStatusEl = document.getElementById('stdDevStatus');
+        const sequenceMemoryEl = document.getElementById('sequenceMemory');
+        const tradeLogEl = document.getElementById('tradeLog');
+
+        const headerBalance = document.getElementById('headerBalance');
+        const headerAccountType = document.getElementById('headerAccountType');
+        const accountHeader = document.getElementById('accountHeader');
+        const connectionDot = document.getElementById('connectionDot');
+
+        // Audio System
         function playBeep(freq = 600, duration = 0.15) {
             try {
                 if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -142,25 +200,6 @@
                 osc.stop(audioCtx.currentTime + duration);
             } catch(e) {}
         }
-
-        // DOM Elements
-        const marketSelect = document.getElementById('marketSelect');
-        const sampleSizeInput = document.getElementById('sampleSize');
-        const alertPctInput = document.getElementById('alertPct');
-        const connectBtn = document.getElementById('connectBtn');
-        const latestPriceEl = document.getElementById('latestPrice');
-        const latestDigitEl = document.getElementById('latestDigit');
-        const hottestDigitEl = document.getElementById('hottestDigit');
-        const coldestDigitEl = document.getElementById('coldestDigit');
-        const repeatStreakEl = document.getElementById('repeatStreak');
-        const alertBanner = document.getElementById('alertBanner');
-        
-        // NEW DOM Elements
-        const confidenceSignalEl = document.getElementById('confidenceSignal');
-        const stdDevSignalEl = document.getElementById('stdDevSignal');
-        const stdDevStatusEl = document.getElementById('stdDevStatus');
-        const sequenceMemoryEl = document.getElementById('sequenceMemory');
-        const tradeLogEl = document.getElementById('tradeLog');
 
         // Chart Init
         const ctx = document.getElementById('frequencyChart').getContext('2d');
@@ -186,34 +225,170 @@
             }
         });
 
-        // NEW: Trade Logging Function
         function logTrade(message, isError = false) {
             const now = new Date();
             const timeStr = now.toLocaleTimeString();
             const logEntry = document.createElement('div');
-            logEntry.className = isError ? "text-rose-400" : "text-emerald-400";
+            logEntry.className = isError ? "text-rose-400 font-bold" : "text-emerald-400";
             logEntry.innerHTML = `[${timeStr}] ${message}`;
             tradeLogEl.insertBefore(logEntry, tradeLogEl.firstChild);
+            if (tradeLogEl.children.length > 20) tradeLogEl.removeChild(tradeLogEl.lastChild);
+        }
+
+        // ==========================================
+        // OAUTH LOGIN & TOKEN EXTRACTION
+        // ==========================================
+        oauthLoginBtn.addEventListener('click', () => {
+            // Redirects user to Deriv's official secure login page
+            const redirectUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=EN&brand=deriv`;
+            window.location.href = redirectUrl;
+        });
+
+        function checkUrlForOAuthTokens() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token1 = urlParams.get('token1'); // Deriv passes the main account token as token1
             
-            // Keep log short
-            if (tradeLogEl.children.length > 20) {
-                tradeLogEl.removeChild(tradeLogEl.lastChild);
+            if (token1) {
+                currentOAuthToken = token1;
+                
+                // Clean the URL so the token isn't sitting visible in the address bar
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Automatically connect now that we have the token
+                connectToDeriv();
             }
         }
 
-        // NEW: Execute Trade Function
+        // ==========================================
+        // WEBSOCKET CONNECTION & EXECUTION
+        // ==========================================
+        function connectToDeriv() {
+            if (ws) ws.close();
+            if (!currentOAuthToken) return;
+
+            loginSection.classList.add('hidden');
+            tradingControls.classList.remove('opacity-50', 'pointer-events-none');
+            disconnectBtn.classList.remove('hidden');
+            
+            const market = marketSelect.value;
+            tickHistory = [];
+            previousDigit = null;
+            streakCount = 1;
+            isAuthorized = false;
+            tradeLogEl.innerHTML = "";
+            
+            logTrade("Initializing connection to Deriv...");
+
+            ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+
+            ws.onopen = () => {
+                connectionDot.classList.replace('bg-rose-500', 'bg-amber-500');
+                logTrade("WebSocket open. Authenticating OAuth Token...");
+                ws.send(JSON.stringify({ authorize: currentOAuthToken }));
+            };
+
+            ws.onmessage = (msg) => {
+                const data = JSON.parse(msg.data);
+                
+                if (data.msg_type === 'authorize') {
+                    if (data.error) {
+                        logTrade(`Authentication Failed: ${data.error.message}`, true);
+                        disconnectFromDeriv();
+                        return;
+                    }
+                    isAuthorized = true;
+                    connectionDot.classList.replace('bg-amber-500', 'bg-emerald-500');
+                    
+                    const isVirtual = data.authorize.is_virtual;
+                    const balance = data.authorize.balance;
+                    const currency = data.authorize.currency;
+
+                    headerBalance.textContent = `${balance.toFixed(2)} ${currency}`;
+                    if (isVirtual) {
+                        headerAccountType.textContent = "DEMO ACCOUNT";
+                        headerAccountType.className = "text-[10px] text-amber-400 font-black tracking-widest uppercase animate-pulse";
+                        accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-amber-500";
+                    } else {
+                        headerAccountType.textContent = "REAL MONEY ACCOUNT";
+                        headerAccountType.className = "text-[10px] text-rose-500 font-black tracking-widest uppercase animate-pulse";
+                        accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-rose-500";
+                    }
+
+                    logTrade(`Success! Authenticated via OAuth.`);
+                    
+                    ws.send(JSON.stringify({ "balance": 1, "subscribe": 1 }));
+                    
+                    // Request Ticks immediately
+                    ws.send(JSON.stringify({ ticks: market }));
+                }
+
+                if (data.msg_type === 'balance') {
+                    const currentBal = data.balance.balance;
+                    const curr = data.balance.currency;
+                    headerBalance.textContent = `${currentBal.toFixed(2)} ${curr}`;
+                }
+
+                if (data.msg_type === 'tick' && data.tick) { 
+                    processTick(data.tick); 
+                }
+
+                if (data.msg_type === 'buy') {
+                    if (data.error) {
+                        logTrade(`Trade Failed: ${data.error.message}`, true);
+                        setTimeout(() => { isTrading = false; }, 2000); 
+                    } else {
+                        logTrade(`Trade Executed! Contract ID: <b class="text-white">${data.buy.contract_id}</b>`);
+                        setTimeout(() => { 
+                            isTrading = false; 
+                            logTrade("Cooldown complete. Resuming analysis...");
+                        }, 5000);
+                    }
+                }
+            };
+
+            ws.onclose = () => { 
+                if(isAuthorized) disconnectFromDeriv(); 
+            };
+        }
+
+        function disconnectFromDeriv() {
+            if (ws) ws.close();
+            ws = null;
+            isAuthorized = false;
+            currentOAuthToken = null; // Clear the token from memory
+            
+            // Revert UI to Login State
+            loginSection.classList.remove('hidden');
+            tradingControls.classList.add('opacity-50', 'pointer-events-none');
+            disconnectBtn.classList.add('hidden');
+            
+            connectionDot.classList.replace('bg-emerald-500', 'bg-rose-500');
+            alertBanner.classList.add('hidden');
+            confidenceSignalEl.textContent = "-";
+            stdDevSignalEl.textContent = "-";
+            
+            headerBalance.textContent = "-";
+            headerAccountType.textContent = "Disconnected";
+            headerAccountType.className = "text-[10px] text-gray-500 font-bold tracking-widest uppercase";
+            accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-gray-600";
+            
+            logTrade("Disconnected. Please log in again.", true);
+        }
+
         function executeTrade(targetDigit) {
             if (!isAuthorized || isTrading) return; 
             
             isTrading = true; 
-            logTrade(`Initiating BUY command for Digit MATCH on <b class="text-white">${targetDigit}</b>...`);
+            const currentStake = parseFloat(stakeInput.value) || 1.00;
+
+            logTrade(`Initiating BUY command for Digit MATCH on <b class="text-white">${targetDigit}</b> (Stake: $${currentStake})...`);
             playBeep(800, 0.5); 
 
             const buyPayload = {
                 buy: "1",
-                price: 2.00, // Max willing to pay to secure a $1 contract
+                price: currentStake * 2, 
                 parameters: {
-                    amount: 1.00, // Fixed $1 Stake
+                    amount: currentStake,
                     basis: "stake",
                     contract_type: "DIGITMATCH",
                     currency: "USD",
@@ -227,97 +402,16 @@
             ws.send(JSON.stringify(buyPayload));
         }
 
-        function connectToDeriv() {
-            if (ws) ws.close();
-            
-            const token = document.getElementById('apiToken').value.trim();
-            if (!token) {
-                alert("Please enter your API Trading Token to connect.");
-                return;
-            }
-
-            const market = marketSelect.value;
-            tickHistory = [];
-            previousDigit = null;
-            streakCount = 1;
-            isAuthorized = false;
-            tradeLogEl.innerHTML = "";
-            
-            ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
-
-            ws.onopen = () => {
-                connectBtn.textContent = 'Authenticating...';
-                connectBtn.classList.replace('bg-emerald-500', 'bg-amber-500');
-                logTrade("Connecting to Deriv WebSocket...");
-                // Send Authorization First
-                ws.send(JSON.stringify({ authorize: token }));
-            };
-
-            ws.onmessage = (msg) => {
-                const data = JSON.parse(msg.data);
-                
-                // Handle Authorization
-                if (data.msg_type === 'authorize') {
-                    if (data.error) {
-                        logTrade(`Auth Failed: ${data.error.message}`, true);
-                        disconnectFromDeriv();
-                        return;
-                    }
-                    isAuthorized = true;
-                    connectBtn.textContent = 'Disconnect (LIVE TRADING)';
-                    connectBtn.classList.replace('bg-amber-500', 'bg-rose-500');
-                    logTrade(`Authorized. Account: <b class="text-white">${data.authorize.loginid}</b> | Balance: <b class="text-white">$${data.authorize.balance}</b>`);
-                    
-                    // Request Ticks after Auth
-                    ws.send(JSON.stringify({ ticks: market }));
-                }
-
-                // Handle Ticks
-                if (data.msg_type === 'tick' && data.tick) { 
-                    processTick(data.tick); 
-                }
-
-                // Handle Trade Execution Response
-                if (data.msg_type === 'buy') {
-                    if (data.error) {
-                        logTrade(`Trade Failed: ${data.error.message}`, true);
-                    } else {
-                        logTrade(`Trade Executed! Contract ID: <b class="text-white">${data.buy.contract_id}</b>`);
-                    }
-                    // 5 Second Cooldown before allowing another trade
-                    setTimeout(() => { 
-                        isTrading = false; 
-                        logTrade("Cooldown complete. Resuming analysis...");
-                    }, 5000);
-                }
-            };
-
-            ws.onclose = () => { disconnectFromDeriv(); };
-        }
-
-        function disconnectFromDeriv() {
-            if (ws) ws.close();
-            ws = null;
-            isAuthorized = false;
-            connectBtn.textContent = 'Connect & Authenticate';
-            connectBtn.classList.replace('bg-rose-500', 'bg-emerald-500');
-            alertBanner.classList.add('hidden');
-            confidenceSignalEl.textContent = "-";
-            stdDevSignalEl.textContent = "-";
-            logTrade("Disconnected.", true);
-        }
-
         function processTick(tick) {
             const price = tick.quote;
             const priceStr = price.toFixed(tick.pip_size);
             const lastDigit = parseInt(priceStr.slice(-1));
             const maxTicks = parseInt(sampleSizeInput.value) || 100;
-            const triggerLimit = parseInt(alertPctInput.value) || 20;
+            const triggerLimit = parseInt(alertPctInput.value) || 17;
 
             latestPriceEl.textContent = priceStr;
             latestDigitEl.textContent = lastDigit;
 
-            // Sequential Memory N-Gram Tracker
             if (tickHistory.length > 2) {
                 const prevIndex = tickHistory.lastIndexOf(lastDigit, tickHistory.length - 2);
                 if (prevIndex !== -1 && prevIndex < tickHistory.length - 1) {
@@ -326,7 +420,6 @@
                 }
             }
 
-            // Repeat Streak
             if (previousDigit !== null) {
                 if (lastDigit === previousDigit) {
                     streakCount++;
@@ -345,7 +438,6 @@
             tickHistory.push(lastDigit);
             if (tickHistory.length > maxTicks) tickHistory.shift();
 
-            // Calculate Frequency
             const counts = Array(10).fill(0);
             tickHistory.forEach(num => counts[num]++);
             const total = tickHistory.length;
@@ -363,18 +455,16 @@
             hottestDigitEl.textContent = `${hottest}`;
             coldestDigitEl.textContent = `${coldest}`;
 
-            // 1. CONFIDENCE SCORING & AUTO-TRADE TRIGGER
             if (total >= 20) {
                 confidenceSignalEl.textContent = `${maxPct.toFixed(1)}%`;
                 
-                // Calculate Standard Deviation
                 const mean = total / 10;
                 const squareDiffs = counts.map(count => { const diff = count - mean; return diff * diff; });
                 const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / 10;
                 const stdDev = Math.sqrt(avgSquareDiff);
                 stdDevSignalEl.textContent = stdDev.toFixed(2);
                 
-                if (stdDev < 2.0) {
+                if (stdDev < 2.6) {
                     stdDevSignalEl.className = "text-2xl font-black mt-0.5 text-rose-500 animate-pulse";
                     stdDevStatusEl.textContent = "Choppy/Flat Market! Avoid.";
                     stdDevStatusEl.className = "text-[8px] text-rose-500 mt-0.5 font-bold";
@@ -384,12 +474,10 @@
                     stdDevStatusEl.className = "text-[8px] text-emerald-400 mt-0.5";
                 }
 
-                // The Golden Trigger
-                if (maxPct >= 15) {
+                if (maxPct >= 17) {
                     confidenceSignalEl.className = "text-2xl font-black mt-0.5 text-emerald-400 animate-pulse";
                     
-                    // If Confidence is >= 15%, Market is NOT choppy (StdDev >= 2), and Bot is NOT on cooldown -> FIRE!
-                    if (stdDev >= 2.0 && !isTrading) {
+                    if (stdDev >= 2.6 && !isTrading) {
                         executeTrade(hottest);
                     }
                 } else {
@@ -397,7 +485,6 @@
                 }
             }
 
-            // Alarms
             if (maxPct >= triggerLimit) {
                 if(alertBanner.classList.contains('hidden')) {
                     alertBanner.classList.remove('hidden');
@@ -408,7 +495,6 @@
                 alertBanner.classList.add('hidden');
             }
 
-            // Update Chart
             frequencyChart.data.datasets[0].data = percentages;
             const bgColors = percentages.map((p, d) => {
                 if (d === hottest) return 'rgba(244, 63, 94, 0.85)'; 
@@ -419,13 +505,22 @@
             frequencyChart.update('none');
         }
 
-        // Event Listeners
-        connectBtn.addEventListener('click', () => {
-            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            if (ws) { disconnectFromDeriv(); } else { connectToDeriv(); }
+        // UI Event Listeners
+        disconnectBtn.addEventListener('click', disconnectFromDeriv);
+
+        // When user changes market, re-subscribe to the new tick stream
+        marketSelect.addEventListener('change', () => { 
+            if (ws && isAuthorized) {
+                // Forget previous tick stream (simplified by just reconnecting)
+                connectToDeriv(); 
+            } 
         });
 
-        marketSelect.addEventListener('change', () => { if (ws) connectToDeriv(); });
+        // Initialize App on Page Load
+        window.onload = () => {
+            // Check if returning from Deriv OAuth screen
+            checkUrlForOAuthTokens();
+        };
 
     </script>
 </body>
