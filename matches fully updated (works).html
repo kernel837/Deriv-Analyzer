@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deriv Pro Tick Analyzer & Auto-Trader</title>
+    
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-3 select-none text-xs">
+
+    <div class="max-w-md mx-auto">
+        
+        <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-gray-600" id="accountHeader">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Account Status</span>
+                <span id="headerAccountType" class="text-[10px] text-gray-500 font-bold tracking-widest uppercase">Disconnected</span>
+            </div>
+            <div class="flex justify-between items-end">
+                <div>
+                    <span class="text-[10px] text-gray-500 block">Live Balance</span>
+                    <div id="headerBalance" class="text-2xl font-black text-white">-</div>
+                </div>
+                <div id="connectionDot" class="h-3 w-3 rounded-full bg-rose-500 mb-1"></div>
+            </div>
+        </div>
+
+        <div id="alertBanner" class="hidden bg-rose-600 text-white font-bold text-center py-1.5 rounded-lg mb-2 animate-pulse uppercase tracking-wider">
+            ⚠️ Hot Spike Detected!
+        </div>
+
+        <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3 flex flex-col gap-2">
+            <div class="mb-2">
+                <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Deriv API Trading Token</label>
+                <input type="password" id="apiToken" placeholder="Paste Read/Trade API token here..." class="w-full bg-gray-900 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs">
+            </div>
+
+            <div class="mb-2">
+                <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Market</label>
+                <select id="marketSelect" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1.5 text-white focus:outline-none focus:border-emerald-500">
+                    <optgroup label="Volatility (1s) Indices">
+                        <option value="1HZ10V" selected>Volatility 10 (1s) Index</option>
+                        <option value="1HZ25V">Volatility 25 (1s) Index</option>
+                        <option value="1HZ50V">Volatility 50 (1s) Index</option>
+                        <option value="1HZ75V">Volatility 75 (1s) Index</option>
+                        <option value="1HZ100V">Volatility 100 (1s) Index</option>
+                        <option value="1HZ150V">Volatility 150 (1s) Index</option>
+                        <option value="1HZ250V">Volatility 250 (1s) Index</option>
+                    </optgroup>
+                    <optgroup label="Continuous Volatility Indices">
+                        <option value="R_10">Volatility 10 Index</option>
+                        <option value="R_25">Volatility 25 Index</option>
+                        <option value="R_50">Volatility 50 Index</option>
+                        <option value="R_75">Volatility 75 Index</option>
+                        <option value="R_100">Volatility 100 Index</option>
+                    </optgroup>
+                    <optgroup label="Jump Indices">
+                        <option value="JD10">Jump 10 Index</option>
+                        <option value="JD25">Jump 25 Index</option>
+                        <option value="JD50">Jump 50 Index</option>
+                        <option value="JD75">Jump 75 Index</option>
+                        <option value="JD100">Jump 100 Index</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mb-2 border-b border-gray-700 pb-2">
+                <div>
+                    <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Stake ($)</label>
+                    <input type="number" id="stakeAmount" value="1.00" step="0.50" min="0.35" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Scan Ticks</label>
+                    <input type="number" id="sampleSize" value="150" min="20" max="500" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-medium text-gray-400 mb-0.5">Beep Alert %</label>
+                    <input type="number" id="alertPct" value="15" min="10" max="50" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-1 text-center text-white focus:outline-none focus:border-emerald-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mb-1">
+                <div>
+                    <label class="block text-[10px] font-bold text-emerald-400 mb-0.5 uppercase tracking-wider">Trigger: Min Confidence (%)</label>
+                    <input type="number" id="tradeConf" value="17" step="1" class="w-full bg-gray-900 border border-emerald-600/50 rounded-lg px-2 py-1.5 text-center text-emerald-400 font-bold focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-purple-400 mb-0.5 uppercase tracking-wider">Trigger: Min Std Dev</label>
+                    <input type="number" id="tradeStdDev" value="2.6" step="0.1" class="w-full bg-gray-900 border border-purple-600/50 rounded-lg px-2 py-1.5 text-center text-purple-400 font-bold focus:outline-none focus:border-purple-500">
+                </div>
+            </div>
+
+            <div class="flex gap-2 mt-2">
+                <button id="connectBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition-colors">
+                    Connect & Watch
+                </button>
+                <button id="tradeToggleBtn" class="flex-1 bg-gray-600 text-gray-400 font-bold py-2 rounded-lg transition-colors" disabled>
+                    Start Auto-Trade
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border-b-2 border-emerald-500 text-center">
+                <span class="text-[9px] text-emerald-400 uppercase font-bold tracking-widest">Confidence Score</span>
+                <div id="confidenceSignal" class="text-2xl font-black mt-0.5 text-gray-500">-</div>
+                <p class="text-[8px] text-gray-400 mt-0.5">Hottest Digit Probability</p>
+            </div>
+            
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border-b-2 border-purple-500 text-center">
+                <span class="text-[9px] text-purple-400 uppercase font-bold tracking-widest">Std Deviation</span>
+                <div id="stdDevSignal" class="text-2xl font-black mt-0.5 text-gray-500">-</div>
+                <p class="text-[8px] text-gray-400 mt-0.5" id="stdDevStatus">Measuring volatility...</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 mb-3 text-center">
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg">
+                <span class="text-[9px] text-gray-400 uppercase">Last Price</span>
+                <div id="latestPrice" class="font-mono font-bold mt-1 text-blue-400 text-xs truncate">-</div>
+            </div>
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg">
+                <span class="text-[9px] text-gray-400 uppercase">Last Digit</span>
+                <div id="latestDigit" class="text-xl font-black text-yellow-400 mt-0.5">-</div>
+            </div>
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border border-rose-500/30">
+                <span class="text-[9px] text-rose-400 uppercase">Hottest</span>
+                <div id="hottestDigit" class="text-xl font-bold mt-0.5 text-rose-400">-</div>
+            </div>
+            <div class="bg-gray-800 p-2 rounded-xl shadow-lg border border-cyan-500/30">
+                <span class="text-[9px] text-cyan-400 uppercase">Coldest</span>
+                <div id="coldestDigit" class="text-xl font-bold mt-0.5 text-cyan-400">-</div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800 px-3 py-2 rounded-xl shadow-lg mb-3 border border-indigo-500/30">
+            <span class="text-indigo-400 text-[10px] font-semibold uppercase tracking-wider block mb-1">Sequential Memory (N-Grams)</span>
+            <div id="sequenceMemory" class="font-mono text-gray-300 text-xs h-4 overflow-hidden">
+                Waiting for repeating patterns...
+            </div>
+        </div>
+
+        <div class="bg-gray-800 px-3 py-1.5 rounded-xl shadow-lg mb-3 flex justify-between items-center border border-amber-500/20">
+            <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider">Consecutive Repeat</span>
+            <div id="repeatStreak" class="font-bold text-amber-400 text-sm">No Streak</div>
+        </div>
+        
+        <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3">
+            <span class="text-gray-400 text-[10px] font-semibold uppercase tracking-wider block mb-1">Live Trade Execution Log</span>
+            <div id="tradeLog" class="h-24 overflow-y-auto font-mono text-[10px] space-y-1 text-gray-300 bg-gray-900 rounded p-1.5 border border-gray-700/50">
+                System Ready. Waiting for connection...
+            </div>
+        </div>
+
+        <div class="bg-gray-800 p-3 rounded-xl shadow-lg mb-3">
+            <div class="h-40">
+                <canvas id="frequencyChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let tickHistory = [];
+        let previousDigit = null;
+        let streakCount = 1;
+        const appId = 1089; 
+        
+        let isAuthorized = false;
+        let isTrading = false;
+        let autoTradeEnabled = false; // FLAG FOR WATCH MODE
+        let audioCtx = null;
+
+        function playBeep(freq = 600, duration = 0.15) {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {
+                console.warn("Audio blocked by browser.");
+            }
+        }
+
+        const marketSelect = document.getElementById('marketSelect');
+        const sampleSizeInput = document.getElementById('sampleSize');
+        const alertPctInput = document.getElementById('alertPct');
+        const stakeInput = document.getElementById('stakeAmount');
+        const tradeConfInput = document.getElementById('tradeConf');
+        const tradeStdDevInput = document.getElementById('tradeStdDev');
+        
+        const connectBtn = document.getElementById('connectBtn');
+        const tradeToggleBtn = document.getElementById('tradeToggleBtn'); // TOGGLE BUTTON
+        
+        const latestPriceEl = document.getElementById('latestPrice');
+        const latestDigitEl = document.getElementById('latestDigit');
+        const hottestDigitEl = document.getElementById('hottestDigit');
+        const coldestDigitEl = document.getElementById('coldestDigit');
+        const repeatStreakEl = document.getElementById('repeatStreak');
+        const alertBanner = document.getElementById('alertBanner');
+        
+        const confidenceSignalEl = document.getElementById('confidenceSignal');
+        const stdDevSignalEl = document.getElementById('stdDevSignal');
+        const stdDevStatusEl = document.getElementById('stdDevStatus');
+        const sequenceMemoryEl = document.getElementById('sequenceMemory');
+        const tradeLogEl = document.getElementById('tradeLog');
+
+        const headerBalance = document.getElementById('headerBalance');
+        const headerAccountType = document.getElementById('headerAccountType');
+        const accountHeader = document.getElementById('accountHeader');
+        const connectionDot = document.getElementById('connectionDot');
+
+        const ctx = document.getElementById('frequencyChart').getContext('2d');
+        const frequencyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                datasets: [{
+                    data: Array(10).fill(0),
+                    backgroundColor: 'rgba(52, 211, 153, 0.4)',
+                    borderColor: 'rgba(52, 211, 153, 0.9)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 30, grid: { color: '#374151' }, ticks: { color: '#9CA3AF' } },
+                    x: { grid: { display: false }, ticks: { color: '#9CA3AF', font: { weight: 'bold' } } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        function logTrade(message, type = 'info') {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            
+            let color = 'text-emerald-400';
+            if(type === 'error') color = 'text-rose-500 font-bold';
+            if(type === 'warn') color = 'text-amber-400 font-bold';
+            if(type === 'neutral') color = 'text-gray-400';
+
+            logEntry.className = color;
+            logEntry.innerHTML = `[${timeStr}] ${message}`;
+            tradeLogEl.insertBefore(logEntry, tradeLogEl.firstChild);
+            
+            if (tradeLogEl.children.length > 20) {
+                tradeLogEl.removeChild(tradeLogEl.lastChild);
+            }
+        }
+
+        function executeTrade(targetDigit) {
+            if (!isAuthorized || isTrading) return; 
+            
+            isTrading = true; 
+            const currentStake = parseFloat(stakeInput.value) || 1.00;
+
+            logTrade(`Initiating BUY command for Digit MATCH on <b class="text-white">${targetDigit}</b> (Stake: $${currentStake.toFixed(2)})...`, 'warn');
+            playBeep(800, 0.5); 
+
+            const buyPayload = {
+                buy: "1",
+                price: currentStake * 2, 
+                parameters: {
+                    amount: currentStake, 
+                    basis: "stake",
+                    contract_type: "DIGITMATCH",
+                    currency: "USD",
+                    duration: 1,
+                    duration_unit: "t",
+                    symbol: marketSelect.value,
+                    barrier: targetDigit.toString()
+                }
+            };
+
+            ws.send(JSON.stringify(buyPayload));
+        }
+
+        function connectToDeriv() {
+            // Hard reset the connection if it exists
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            
+            const token = document.getElementById('apiToken').value.trim();
+            if (!token) {
+                alert("Please paste your API Trading Token into the box.");
+                return;
+            }
+
+            const market = marketSelect.value;
+            tickHistory = [];
+            previousDigit = null;
+            streakCount = 1;
+            isAuthorized = false;
+            isTrading = false;
+            autoTradeEnabled = false; // Reset to watch mode on new connection
+            tradeLogEl.innerHTML = "";
+            
+            logTrade("Initializing connection to Deriv...");
+            connectBtn.textContent = 'Connecting...';
+
+            try {
+                ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+            } catch(e) {
+                logTrade("Browser blocked the WebSocket creation. Press F12 to check console.", 'error');
+                resetUI();
+                return;
+            }
+
+            ws.onopen = () => {
+                logTrade("WebSocket open. Sending authorization token...");
+                ws.send(JSON.stringify({ authorize: token }));
+            };
+
+            ws.onerror = (error) => {
+                logTrade("CRITICAL ERROR: Connection blocked! Check your network or API token.", 'error');
+            };
+
+            ws.onmessage = (msg) => {
+                const data = JSON.parse(msg.data);
+                
+                if (data.msg_type === 'authorize') {
+                    if (data.error) {
+                        logTrade(`Authentication Failed: ${data.error.message}`, 'error');
+                        disconnectFromDeriv();
+                        return;
+                    }
+                    isAuthorized = true;
+                    
+                    // UI Updates for connection
+                    connectBtn.textContent = 'Disconnect';
+                    connectBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    connectBtn.classList.add('bg-rose-500', 'hover:bg-rose-600');
+                    connectionDot.classList.replace('bg-rose-500', 'bg-amber-500');
+                    
+                    // Unlock Trade Toggle Button
+                    tradeToggleBtn.disabled = false;
+                    tradeToggleBtn.classList.replace('bg-gray-600', 'bg-emerald-500');
+                    tradeToggleBtn.classList.replace('text-gray-400', 'text-gray-950');
+
+                    const isVirtual = data.authorize.is_virtual;
+                    const balance = data.authorize.balance;
+                    const currency = data.authorize.currency;
+
+                    headerBalance.textContent = `${balance.toFixed(2)} ${currency}`;
+                    if (isVirtual) {
+                        headerAccountType.textContent = "DEMO ACCOUNT";
+                        headerAccountType.className = "text-[10px] text-amber-400 font-black tracking-widest uppercase animate-pulse";
+                        accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-amber-500";
+                    } else {
+                        headerAccountType.textContent = "REAL MONEY ACCOUNT";
+                        headerAccountType.className = "text-[10px] text-rose-500 font-black tracking-widest uppercase animate-pulse";
+                        accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-rose-500";
+                    }
+
+                    logTrade(`Success! Account: <b class="text-white">${data.authorize.loginid}</b>. Watching Market...`, 'info');
+                    
+                    ws.send(JSON.stringify({ "balance": 1, "subscribe": 1 }));
+                    ws.send(JSON.stringify({ ticks: market }));
+                }
+
+                if (data.msg_type === 'balance') {
+                    const currentBal = data.balance.balance;
+                    const curr = data.balance.currency;
+                    headerBalance.textContent = `${currentBal.toFixed(2)} ${curr}`;
+                }
+
+                if (data.msg_type === 'tick' && data.tick) { 
+                    processTick(data.tick); 
+                }
+
+                if (data.msg_type === 'buy') {
+                    if (data.error) {
+                        logTrade(`Trade Failed: ${data.error.message}`, 'error');
+                        isTrading = false; 
+                    } else {
+                        logTrade(`Trade Executed! Contract ID: <b class="text-white">${data.buy.contract_id}</b>`);
+                        isTrading = false; 
+                    }
+                }
+            };
+
+            // Bulletproof reset if connection drops
+            ws.onclose = () => { 
+                disconnectFromDeriv(); 
+            };
+        }
+
+        function disconnectFromDeriv() {
+            if (ws) {
+                ws.close();
+            }
+            resetUI();
+            logTrade("Disconnected from Deriv.", 'error');
+        }
+
+        function resetUI() {
+            ws = null;
+            isAuthorized = false;
+            isTrading = false;
+            autoTradeEnabled = false;
+
+            // Reset Connect Button
+            connectBtn.textContent = 'Connect & Watch';
+            connectBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600');
+            connectBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            
+            // Reset Toggle Button
+            tradeToggleBtn.disabled = true;
+            tradeToggleBtn.textContent = 'Start Auto-Trade';
+            tradeToggleBtn.className = "flex-1 bg-gray-600 text-gray-400 font-bold py-2 rounded-lg transition-colors";
+            
+            connectionDot.classList.replace('bg-amber-500', 'bg-rose-500');
+            connectionDot.classList.replace('bg-emerald-500', 'bg-rose-500');
+
+            alertBanner.classList.add('hidden');
+            confidenceSignalEl.textContent = "-";
+            stdDevSignalEl.textContent = "-";
+            
+            headerBalance.textContent = "-";
+            headerAccountType.textContent = "Disconnected";
+            headerAccountType.className = "text-[10px] text-gray-500 font-bold tracking-widest uppercase";
+            accountHeader.className = "bg-gray-800 p-3 rounded-xl shadow-lg mb-3 border-b-4 border-gray-600";
+        }
+
+        // --- BUTTON EVENT LISTENERS ---
+
+        // Bulletproof click handler for Connect
+        connectBtn.onclick = function() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {}
+
+            // If a connection exists in ANY state, kill it. Otherwise, connect.
+            if (isAuthorized || ws !== null) {
+                disconnectFromDeriv();
+            } else {
+                connectToDeriv();
+            }
+        };
+
+        // Trade Toggle handler
+        tradeToggleBtn.onclick = function() {
+            autoTradeEnabled = !autoTradeEnabled;
+            
+            if (autoTradeEnabled) {
+                tradeToggleBtn.textContent = 'Stop Auto-Trade';
+                tradeToggleBtn.classList.replace('bg-emerald-500', 'bg-rose-500');
+                tradeToggleBtn.classList.replace('text-gray-950', 'text-white');
+                connectionDot.classList.replace('bg-amber-500', 'bg-emerald-500');
+                logTrade("Auto-Trading ENABLED. Waiting for triggers...", "warn");
+            } else {
+                tradeToggleBtn.textContent = 'Start Auto-Trade';
+                tradeToggleBtn.classList.replace('bg-rose-500', 'bg-emerald-500');
+                tradeToggleBtn.classList.replace('text-white', 'text-gray-950');
+                connectionDot.classList.replace('bg-emerald-500', 'bg-amber-500');
+                logTrade("Auto-Trading PAUSED. Still watching market.", "neutral");
+            }
+        };
+
+        // Auto-reconnect if market is changed
+        marketSelect.addEventListener('change', () => { 
+            if (isAuthorized) {
+                disconnectFromDeriv();
+                connectToDeriv();
+            } 
+        });
+
+        // --- CORE TICK PROCESSING ---
+        function processTick(tick) {
+            const price = tick.quote;
+            const priceStr = price.toFixed(tick.pip_size);
+            const lastDigit = parseInt(priceStr.slice(-1));
+            
+            const maxTicks = parseInt(sampleSizeInput.value) || 150;
+            const triggerLimit = parseInt(alertPctInput.value) || 15;
+            const autoTradeMinConf = parseFloat(tradeConfInput.value) || 17;
+            const autoTradeMinStdDev = parseFloat(tradeStdDevInput.value) || 2.6;
+
+            latestPriceEl.textContent = priceStr;
+            latestDigitEl.textContent = lastDigit;
+
+            if (tickHistory.length > 2) {
+                const prevIndex = tickHistory.lastIndexOf(lastDigit, tickHistory.length - 2);
+                if (prevIndex !== -1 && prevIndex < tickHistory.length - 1) {
+                    const digitThatFollowed = tickHistory[prevIndex + 1];
+                    sequenceMemoryEl.innerHTML = `Last time <b class="text-yellow-400">${lastDigit}</b> hit, it was followed by a <b class="text-white">${digitThatFollowed}</b>`;
+                }
+            }
+
+            if (previousDigit !== null) {
+                if (lastDigit === previousDigit) {
+                    streakCount++;
+                    repeatStreakEl.textContent = `💥 DIGIT ${lastDigit} HIT ${streakCount}x IN A ROW!`;
+                    repeatStreakEl.className = "font-bold text-rose-400 text-sm animate-bounce";
+                } else {
+                    if (streakCount > 1) {
+                        repeatStreakEl.className = "font-bold text-amber-400 text-xs";
+                        repeatStreakEl.textContent = `Last: ${previousDigit} (Streak went ${streakCount}x)`;
+                    }
+                    streakCount = 1;
+                }
+            }
+            previousDigit = lastDigit;
+
+            tickHistory.push(lastDigit);
+            if (tickHistory.length > maxTicks) tickHistory.shift();
+
+            const counts = Array(10).fill(0);
+            tickHistory.forEach(num => counts[num]++);
+            const total = tickHistory.length;
+
+            let maxPct = -1; let minPct = 999;
+            let hottest = '-'; let coldest = '-';
+
+            const percentages = counts.map((count, digit) => {
+                const pct = total > 0 ? ((count / total) * 100) : 0;
+                if (pct > maxPct) { maxPct = pct; hottest = digit; }
+                if (pct < minPct) { minPct = pct; coldest = digit; }
+                return pct;
+            });
+
+            hottestDigitEl.textContent = `${hottest}`;
+            coldestDigitEl.textContent = `${coldest}`;
+
+            if (total >= 20) {
+                confidenceSignalEl.textContent = `${maxPct.toFixed(1)}%`;
+                
+                const mean = total / 10;
+                const squareDiffs = counts.map(count => { const diff = count - mean; return diff * diff; });
+                const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / 10;
+                const stdDev = Math.sqrt(avgSquareDiff);
+                stdDevSignalEl.textContent = stdDev.toFixed(2);
+                
+                if (stdDev < autoTradeMinStdDev) {
+                    stdDevSignalEl.className = "text-2xl font-black mt-0.5 text-rose-500 animate-pulse";
+                    stdDevStatusEl.textContent = "Choppy/Flat Market! Avoid.";
+                    stdDevStatusEl.className = "text-[8px] text-rose-500 mt-0.5 font-bold";
+                } else {
+                    stdDevSignalEl.className = "text-2xl font-black mt-0.5 text-white";
+                    stdDevStatusEl.textContent = "Strong trend detected.";
+                    stdDevStatusEl.className = "text-[8px] text-emerald-400 mt-0.5";
+                }
+
+                if (maxPct >= autoTradeMinConf) {
+                    confidenceSignalEl.className = "text-2xl font-black mt-0.5 text-emerald-400 animate-pulse";
+                    
+                    // TRADE TRIGGERS: Must meet conditions AND have Auto-Trade enabled
+                    if (stdDev >= autoTradeMinStdDev && !isTrading) {
+                        if (autoTradeEnabled) {
+                            executeTrade(hottest);
+                        } else {
+                            logTrade(`Triggers met for Digit ${hottest}, but Auto-Trade is OFF. Skipping.`, 'neutral');
+                        }
+                    }
+                } else {
+                    confidenceSignalEl.className = "text-2xl font-black mt-0.5 text-white";
+                }
+            }
+
+            if (maxPct >= triggerLimit) {
+                if(alertBanner.classList.contains('hidden')) {
+                    alertBanner.classList.remove('hidden');
+                    alertBanner.textContent = `⚠️ DIGIT ${hottest} CRITICAL SPIKE: ${maxPct.toFixed(0)}%`;
+                    playBeep(440, 0.3); 
+                }
+            } else {
+                alertBanner.classList.add('hidden');
+            }
+
+            frequencyChart.data.datasets[0].data = percentages;
+            const bgColors = percentages.map((p, d) => {
+                if (d === parseInt(hottest)) return 'rgba(244, 63, 94, 0.85)'; 
+                if (d === parseInt(coldest)) return 'rgba(6, 182, 212, 0.85)'; 
+                return 'rgba(52, 211, 153, 0.2)';
+            });
+            frequencyChart.data.datasets[0].backgroundColor = bgColors;
+            frequencyChart.update('none');
+        }
+
+    </script>
+</body>
+</html>
